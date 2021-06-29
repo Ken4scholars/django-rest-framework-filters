@@ -1,7 +1,9 @@
 from django.test import TestCase
+from django.contrib.auth.models import User
 
+from rest_framework_filters import filters, FilterSet, RelatedFilter
 from tests.testapp.filters import BlogFilter
-from tests.testapp.models import Blog, Post
+from tests.testapp.models import Blog, Post, Note
 
 from .data import RelationshipData
 
@@ -82,3 +84,31 @@ class FilterTests(RelationshipData, TestCase):
             'post__publish_date__year': '2008',
         }
         self.verify(BlogFilter(GET).qs, self.CORRECT)
+
+
+class ExpandedFiltersTests(TestCase):
+
+    def test_include_nested_filters(self):
+        """
+        Ensure that the FilterSet.expanded_filters includes
+        all nested fields from RelatedFilters
+        """
+
+        class UserFilter(FilterSet):
+            username = filters.CharFilter(field_name='username')
+            email = filters.CharFilter(field_name='email')
+
+            class Meta:
+                model = User
+                fields = []
+
+        class NoteFilter(FilterSet):
+            title = filters.CharFilter(field_name='title')
+            author = RelatedFilter(UserFilter, field_name='author', queryset=User.objects.all())
+
+            class Meta:
+                model = Note
+                fields = []
+
+        expected_fields = ['title', 'author__username', 'author__email']
+        self.assertEqual(expected_fields, list(NoteFilter.expanded_filters.keys()))
